@@ -9,13 +9,13 @@ nvtk_mp42gpx_v2.py - Script extracts GPS data from Novatek generated MP4 files.
 
 
 ## Use
-'''
+```
 cd <path_to_your_Viofo_dashcam_MP4_videos>
 python <path_to_script>\dashcam2josm_v2.py -i *.MP4
-'''
+```
 
 Options:
-'''
+```
 -i    input .MP4 video file(s), globs (eg: *) or directory(ies)
 -c    Crop images generated from all video files. Format: width:height:x:y
 -cf   Crop images generated from front video files. (For *F.MP4 files.) Format: width:height:x:y
@@ -25,7 +25,7 @@ Options:
       By default this script skips images with are too close (less than 5 meters) from previous saved image. 
 -df   User provided directory with ffmpeg tool.
 -de   User provided directory with exiftool tool.
-'''
+```
 
 See scripts for more information 
 
