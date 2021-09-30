@@ -29,6 +29,21 @@ Options:
 
 See scripts for more information 
 
+## Mapillary.com hints
+
+Use [mapillary_tools](https://github.com/mapillary/mapillary_tools) to upload images made from your dashcam movies.
+*Upload images from front and rear dashcam as separate tracks !*
+
+cmd
+
+```
+cd <path_to_jpgs>
+mapillary_tools process_and_upload --import_path . --user_name "mapillary_user_name"
+```
+
+Example of uploaded track:
+https://www.mapillary.com/app/?lat=50.324699&lng=18.927374&z=17.436678368356983&pKey=614167796256046&focus=photo
+
 
 
 ## License
