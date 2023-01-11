@@ -34,10 +34,15 @@
 # This avoid generating many images from same position (in a traffic jam or at traffic lights)
 #
 # -df   User provided directory with ffmpeg tool.
-#
 # -de   User provided directory with exiftool tool.
 #
-#
+# -d    Deobfuscates coordinates. If the file only works with JMSPlayer use this flag. 
+#       (param directly pass to nvtk_mp42gpx_v3.py script)
+# -c    Specify on what to sort by. 
+#           The -s f will sort the output by the file name. 
+#           The -s d will sort the output by the GPS date (default).
+#           The -s n will not sort the output.
+#       (param directly pass to nvtk_mp42gpx_v3.py script)
 #
 #
 # Cautions:
@@ -81,9 +86,9 @@ import xml.etree.ElementTree as ET
 bearingCorrectionForRearCam = '180'
 
 
-filesCount=0;
+filesCount = 0;
 def check_in_file(in_file):
-    in_files=[]
+    in_files = []
     for f in in_file:
         # glob needed if for some reason quoted glob is passed, or script is run on the most popular proprietary inferior OS
         for f1 in glob.glob(f):
@@ -105,28 +110,47 @@ def check_in_file(in_file):
 
 
 def get_args():
-    p = argparse.ArgumentParser(description='This script will attempt to extract geotaged images and GPS data from Novatek MP4 video files')
-    p.add_argument('-i',metavar='input',nargs='+',help='input file(s), globs (eg: *) or directory(ies)')
-    p.add_argument('-c',metavar='crop',help='Crop images generated from video files. Format: width:height:x:y')
-    p.add_argument('-cf',metavar='cropFront',help='Crop images generated from front video file. Format: width:height:x:y')
-    p.add_argument('-cr',metavar='cropRear',help='Crop images generated from rear video file. Format: width:height:x:y')
-    p.add_argument('-f',action='store_true',help='Do not skip frames not far enaugh (5m) from previous saved')
-    p.add_argument('-df',metavar='ffmpegUserDir',help='User provided directory with ffmpeg tool. https://ffmpeg.org')
-    p.add_argument('-de',metavar='exiftoolUserDir',help='User provided directory with exiftool tool. https://exiftool.org')
-    args=p.parse_args(sys.argv[1:])
-    crop=check_crop("c",args.c)
-    cropFront=check_crop("cf",args.cf)
-    cropRear=check_crop("cr",args.cr)
-    ffmpegUserDir=args.df
-    exiftoolUserDir=args.de
+    parser = argparse.ArgumentParser(description='This script will attempt to extract geotaged images and GPS data from Novatek MP4 video files')
+    parser.add_argument('-i', metavar='input', nargs='+', help='input file(s), globs (eg: *) or directory(ies)')
+    parser.add_argument('-c', metavar='crop', help='Crop images generated from video files. Format: width:height:x:y')
+    parser.add_argument('-cf', metavar='cropFront', help='Crop images generated from front video file. Format: width:height:x:y')
+    parser.add_argument('-cr', metavar='cropRear', help='Crop images generated from rear video file. Format: width:height:x:y')
+    parser.add_argument('-f', action='store_true', help='Do not skip frames not far enaugh (5m) from previous saved')
+    parser.add_argument('-df', metavar='ffmpegUserDir', help='User provided directory with ffmpeg tool. https://ffmpeg.org')
+    parser.add_argument('-de', metavar='exiftoolUserDir', help='User provided directory with exiftool tool. https://exiftool.org')
+    parser.add_argument('-d', metavar='deobfuscate', help='Deobfuscates coordinates. If the file only works with JMSPlayer use this flag.')
+    parser.add_argument('-s', metavar='sorting', nargs='?', default='d', help=('Specify on what to sort by. '
+                              'The \'-s f\' will sort the output by the file name. '
+                              'The \'-s d\' will sort the output by the GPS date (default). '
+                              'The \'-s n\' will not sort the output.'))
+    
+    args = parser.parse_args(sys.argv[1:])
+    
+    crop = check_crop("c", args.c)
+    cropFront = check_crop("cf", args.cf)
+    cropRear = check_crop("cr", args.cr)
+    ffmpegUserDir = args.df
+    exiftoolUserDir = args.de
+    deobfuscate = args.d
+    sort_by = args.s
+    sort_flags = {
+        'd' : 'Sort coordinates by the GPS Date',
+        'f' : 'Sort coordinates by the input file name.',
+        'n' : 'Do not sort coordinates.',
+    }
+    if sort_by not in sort_flags.keys():
+        print("ERROR: unsupported sort flag '%s' (supported flags: %s)." % (sort_by, sort_flags))
+        parser.print_help()
+        sys.exit(1)
+    
     try:
-        doNotSkip=args.f
-        in_file=check_in_file(args.i)
+        doNotSkip = args.f
+        in_file = check_in_file(args.i)
     except:
         print("Unexpected error:", sys.exc_info()[0])
-        p.print_help()
+        parser.print_help()
         sys.exit(1)
-    return (in_file,crop,cropFront,cropRear,doNotSkip,ffmpegUserDir,exiftoolUserDir)
+    return (in_file, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by)
 
 
 def check_crop(cropParam, cropStr):
@@ -166,7 +190,7 @@ def print_error(errorStr):
     return
 
 
-def create_subDir(subDirPath,subDirGpx,subDirMp4,sourceMp4):
+def create_subDir(subDirPath, subDirGpx, subDirMp4, sourceMp4):
     if not os.path.isdir(subDirPath):
         os.mkdir(subDirPath)
     # remove *.jpg name.MP4 and name.gpx files from subdirectory
@@ -183,13 +207,22 @@ def create_subDir(subDirPath,subDirGpx,subDirMp4,sourceMp4):
     return
 
 
-def create_gpx(name,subDirMp4,currentScriptDir):
+def create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by):
     # run nvtk_mp42gpx_v3.py script
-    print("START run script. %s " % os.path.join(currentScriptDir,'nvtk_mp42gpx_v3.py'))
+    print("START run script. %s " % os.path.join(currentScriptDir, 'nvtk_mp42gpx_v3.py'))
+    command = ['python', os.path.join(currentScriptDir, 'nvtk_mp42gpx_v3.py')]
+    command.append('-i')
+    command.append(subDirMp4)
+    command.append('-f')
+    command.append('-m')
+    command.append('-s')
+    command.append(sort_by)
+    if deobfuscate:
+        command.append('-d')
     if name.upper().endswith("R"): # *R.MP4 files from rear camera (course rotated 180 deg and gps position moved 2m behind)
-        process = subprocess.Popen(['python', os.path.join(currentScriptDir,'nvtk_mp42gpx_v3.py'), '-i', subDirMp4, '-f', '-m', '-b', bearingCorrectionForRearCam], universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    else:                          # *F.MP4 files from front camera
-        process = subprocess.Popen(['python', os.path.join(currentScriptDir,'nvtk_mp42gpx_v3.py'), '-i', subDirMp4, '-f', '-m'], universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        command.append('-b')
+        command.append(bearingCorrectionForRearCam)
+    process = subprocess.Popen(command, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     for line in iter(process.stdout.readline, ""):
         sys.stdout.write(" >" + line)
         sys.stdout.flush()
@@ -207,18 +240,18 @@ def utc_to_local(utc_dt):
     return local_dt.replace(microsecond=utc_dt.microsecond)
 
 
-def create_jpgs(subDirPath,subDirGpx,name,subDirMp4,fileNum,crop,cropFront,cropRear,doNotSkip,ffmpegDir,exiftoolDir):
+def create_jpgs(subDirPath, subDirGpx, name, subDirMp4, fileNum, crop, cropFront, cropRear, doNotSkip, ffmpegDir, exiftoolDir):
     global filesCount
     # read .gpx xml file
     gpxXmlTree = ET.parse(subDirGpx)
     gpxXmlRoot = gpxXmlTree.getroot()
-    n=0
+    n = 0
     timestampPattern = '%Y-%m-%dT%H:%M:%SZ'
     gpxTrkptElemList = gpxXmlRoot.findall('.//{http://www.topografix.com/GPX/1/0}trkpt')
     s=len(gpxTrkptElemList)
     for gpxTrkptElem in gpxTrkptElemList:
-        n=n+1
-        paddedNumber='{0:04d}'.format(n)
+        n = n + 1
+        paddedNumber = '{0:04d}'.format(n)
         gpxDescElem = gpxTrkptElem.find('{http://www.topografix.com/GPX/1/0}desc')
         gpxUtcTimeString = gpxTrkptElem.find('{http://www.topografix.com/GPX/1/0}time').text
         gpxUtcTimeTs = datetime.datetime.strptime(gpxUtcTimeString, timestampPattern)
@@ -228,17 +261,17 @@ def create_jpgs(subDirPath,subDirGpx,name,subDirMp4,fileNum,crop,cropFront,cropR
         if n==1:
             firstGpxTimeTs = gpxUtcTimeTs
         if gpxDescElem is not None:
-            gpxDescList=gpxDescElem.text.split(";")
+            gpxDescList = gpxDescElem.text.split(";")
             frameTimePosition = gpxDescList[0][len("frameTimePosition="):]
             gpxFrameIsFarEnough = gpxDescList[1][len("frameIsFarEnough="):]
         else:
             frameTimePosition = gpxUtcTimeTs - firstGpxTimeTs
             gpxFrameIsFarEnough = "Y"
-        subDirNewJpg = os.path.join(subDirPath, name+'_'+paddedNumber+'.jpg')
-        if gpxFrameIsFarEnough=="N" and not doNotSkip:
+        subDirNewJpg = os.path.join(subDirPath, name + '_' + paddedNumber + '.jpg')
+        if gpxFrameIsFarEnough == "N" and not doNotSkip:
             print('%s/%s:%s/%s: Do not generate .jpg file: at TimeUtc=%s TimeSystem=%s ss=%s. Frame gps location is too close from previous saved frame.'  % (fileNum, filesCount, n, s, gpxUtcTimeString2, gpxSystemTimeString2, frameTimePosition))
             continue
-        print('%s/%s:%s/%s: Generate .jpg file: at TimeUtc=%s TimeSystem=%s ss=%s -> %s'  % (fileNum, filesCount, n, s, gpxUtcTimeString2, gpxSystemTimeString2, frameTimePosition, subDirNewJpg))
+        print('%s/%s:%s/%s: Generate .jpg file: at TimeUtc=%s TimeSystem=%s ss=%s -> %s' % (fileNum, filesCount, n, s, gpxUtcTimeString2, gpxSystemTimeString2, frameTimePosition, subDirNewJpg))
         os.chdir(ffmpegDir)
         if crop:
             subprocess.call(['ffmpeg', '-loglevel', 'error', '-ss', str(frameTimePosition), '-i', subDirMp4, '-filter:v', 'crop='+crop, '-frames:v', '1', '-qscale:v', '1', subDirNewJpg])
@@ -253,12 +286,12 @@ def create_jpgs(subDirPath,subDirGpx,name,subDirMp4,fileNum,crop,cropFront,cropR
     return
 
 
-def geotag_jpgs(subDirPath,subDirGpx,name,exiftoolDir):
+def geotag_jpgs(subDirPath, subDirGpx, name, exiftoolDir):
     print("START exiftool -geotag")
     os.chdir(exiftoolDir)
     # use FileModifyDate saved assuming UTC datetime
     # -geotag option writes exif data: GPS:GPSLatitude, GPS:GPSLongitude, GPS:GPSImgDirection (course)
-    subprocess.call(['exiftool', '-charset', 'FileName='+locale.getpreferredencoding(), '-geotag', subDirGpx, '-Geotime<FileModifyDate', '-P', subDirPath])
+    subprocess.call(['exiftool', '-charset', 'FileName=' + locale.getpreferredencoding(), '-geotag', subDirGpx, '-Geotime<FileModifyDate', '-P', subDirPath])
     print("END exiftool -geotag")
     return
 
@@ -273,46 +306,46 @@ def clean_subDirOrginal(subDirPath):
         os.remove(subDirExiftoolTmp)
     return
 
-def findToolDir(userDir,toolName,currentScriptDir):
-    print("findToolDir: toolName = %s  userDir = %s  currentScriptDir = %s" % (toolName,userDir,currentScriptDir))
+def findToolDir(userDir, toolName, currentScriptDir):
+    print("findToolDir: toolName = %s  userDir = %s  currentScriptDir = %s" % (toolName, userDir, currentScriptDir))
     if (userDir and (os.path.exists(os.path.join(userDir,toolName)) or os.path.exists(os.path.join(userDir,toolName+'.exe')))):
         #print("user provided directory contains tool file")
         return userDir
-    if (os.path.exists(os.path.join(os.path.join(currentScriptDir,toolName),toolName)) or os.path.exists(os.path.join(os.path.join(currentScriptDir,toolName),toolName+'.exe'))):
+    if (os.path.exists(os.path.join(os.path.join(currentScriptDir, toolName), toolName)) or os.path.exists(os.path.join(os.path.join(currentScriptDir, toolName),toolName + '.exe'))):
         #print("directory currentScriptDir\\toolName contains tool file")
-        return os.path.join(currentScriptDir,toolName)
+        return os.path.join(currentScriptDir, toolName)
     #print("return currentScriptDir with hope that tool is on the system path")
     return currentScriptDir
 
 def main():
     startTs = datetime.datetime.now()
-    in_files,crop,cropFront,cropRear,doNotSkip,ffmpegUserDir,exiftoolUserDir=get_args()
-    orginalDir=os.getcwd()
+    in_files, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by = get_args()
+    orginalDir = os.getcwd()
     currentScriptDir = os.path.dirname(os.path.realpath(__file__))
-    ffmpegDir=findToolDir(ffmpegUserDir,'ffmpeg',currentScriptDir)
-    exiftoolDir=findToolDir(exiftoolUserDir,'exiftool',currentScriptDir)
-    print("currentScript = %s   currentScriptDir = %s   currentDirectory = %s   ffmpegDir = %s   exiftoolDir = %s   systemencoding = %s" % (os.path.realpath(__file__),currentScriptDir,os.getcwd(),ffmpegDir,exiftoolDir,locale.getpreferredencoding()))
+    ffmpegDir = findToolDir(ffmpegUserDir, 'ffmpeg', currentScriptDir)
+    exiftoolDir = findToolDir(exiftoolUserDir, 'exiftool', currentScriptDir)
+    print("currentScript = %s   currentScriptDir = %s   currentDirectory = %s   ffmpegDir = %s   exiftoolDir = %s   systemencoding = %s" % (os.path.realpath(__file__), currentScriptDir, os.getcwd(), ffmpegDir, exiftoolDir, locale.getpreferredencoding()))
     print('current video file/total video files:current frame/total video frames:')
-    fileNum=0
+    fileNum = 0
     for f in in_files:
-        fileNum=fileNum+1
+        fileNum = fileNum + 1
         name = f[0:len(f)-4]
-        sourceMp4=os.path.join(os.getcwd(),f)
+        sourceMp4 = os.path.join(os.getcwd(),f)
         # make subdir for each .MP4 file
-        subDirPath=os.path.join(os.getcwd(),name)
+        subDirPath = os.path.join(os.getcwd(), name)
         subDirGpx = os.path.join(subDirPath, name+'.gpx')
         subDirMp4 = os.path.join(subDirPath, name+'.MP4')
         print("f=%s name=%s subDirPath=%s" % (f, name, subDirPath))
         # prepare subfolder for source MP4 file
-        create_subDir(subDirPath,subDirGpx,subDirMp4,sourceMp4)
+        create_subDir(subDirPath, subDirGpx, subDirMp4, sourceMp4)
         # create .gpx file from source MP4 via nvtk_mp42gpx.py script
-        create_gpx(name,subDirMp4,currentScriptDir)
+        create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by)
         # create .jpg files from source MP4 via ffmpeg and exiftool
-        create_jpgs(subDirPath,subDirGpx,name,subDirMp4,fileNum, crop,cropFront,cropRear,doNotSkip,ffmpegDir,exiftoolDir)
+        create_jpgs(subDirPath, subDirGpx, name, subDirMp4, fileNum, crop, cropFront, cropRear, doNotSkip, ffmpegDir, exiftoolDir)
         # remove tmp *.MP4 files
         clean_subDirMp4(subDirMp4)
         # geotag .jpg files from .gpx file via exiftool
-        geotag_jpgs(subDirPath,subDirGpx,name,exiftoolDir)
+        geotag_jpgs(subDirPath, subDirGpx, name, exiftoolDir)
         # remove tmp *.original files
         clean_subDirOrginal(subDirPath)
         os.chdir(orginalDir)

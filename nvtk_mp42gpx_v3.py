@@ -133,8 +133,7 @@ def get_args():
             'n' : 'Do not sort coordinates.',
         }
         if sort_by not in sort_flags.keys():
-            print("ERROR: unsupported sort flag '%s' (supported flags: %s)."
-                  % (sort_by, sort_flags))
+            print("ERROR: unsupported sort flag '%s' (supported flags: %s)." % (sort_by, sort_flags))
             parser.print_help()
             sys.exit(1)
         else:
