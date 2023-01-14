@@ -45,6 +45,8 @@
 #       (param directly pass to nvtk_mp42gpx_v3.py script)
 #
 # -ne   Do not exclude outliers. By default script removes impossible coordinates (too far from each other) due to errors in the GPS data.
+# -nd   Do not exclude duplicates. By default script merges duplicate track points (with same timestamp) into one, due to errors in the GPS data.
+#
 #
 #
 # Cautions:
@@ -126,6 +128,7 @@ def get_args():
                               'The \'-s d\' will sort the output by the GPS date (default). '
                               'The \'-s n\' will not sort the output.'))
     parser.add_argument('-ne', action='store_true', help='Do not exclude outliers. By default script removes impossible coordinates (too far from each other) due to errors in the GPS data.')
+    parser.add_argument('-nd', action='store_true', help='Do not exclude duplicates. By default script removes duplicate track points (with same timestamp) due to errors in the GPS data.')
     
     args = parser.parse_args(sys.argv[1:])
     crop = check_crop("c", args.c)
@@ -145,6 +148,7 @@ def get_args():
         parser.print_help()
         sys.exit(1)
     not_del_outliers = args.ne
+    not_del_duplicates = args.nd
     
     try:
         doNotSkip = args.f
@@ -153,7 +157,7 @@ def get_args():
         print("Unexpected error:", sys.exc_info()[0])
         parser.print_help()
         sys.exit(1)
-    return (in_file, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers)
+    return (in_file, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates)
 
 
 def check_crop(cropParam, cropStr):
@@ -210,7 +214,7 @@ def create_subDir(subDirPath, subDirGpx, subDirMp4, sourceMp4):
     return
 
 
-def create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_outliers):
+def create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates):
     # run nvtk_mp42gpx_v3.py script
     print("START run script. %s " % os.path.join(currentScriptDir, 'nvtk_mp42gpx_v3.py'))
     command = ['python', os.path.join(currentScriptDir, 'nvtk_mp42gpx_v3.py')]
@@ -227,6 +231,8 @@ def create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_
         command.append(bearingCorrectionForRearCam)
     if not not_del_outliers:
         command.append('-e')
+    if not not_del_duplicates:
+        command.append('-u')
     process = subprocess.Popen(command, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     for line in iter(process.stdout.readline, ""):
         sys.stdout.write(" >" + line)
@@ -324,7 +330,7 @@ def findToolDir(userDir, toolName, currentScriptDir):
 
 def main():
     startTs = datetime.datetime.now()
-    in_files, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers = get_args()
+    in_files, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates = get_args()
     orginalDir = os.getcwd()
     currentScriptDir = os.path.dirname(os.path.realpath(__file__))
     ffmpegDir = findToolDir(ffmpegUserDir, 'ffmpeg', currentScriptDir)
@@ -344,7 +350,7 @@ def main():
         # prepare subfolder for source MP4 file
         create_subDir(subDirPath, subDirGpx, subDirMp4, sourceMp4)
         # create .gpx file from source MP4 via nvtk_mp42gpx.py script
-        create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_outliers)
+        create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates)
         # create .jpg files from source MP4 via ffmpeg and exiftool
         create_jpgs(subDirPath, subDirGpx, name, subDirMp4, fileNum, crop, cropFront, cropRear, doNotSkip, ffmpegDir, exiftoolDir)
         # remove tmp *.MP4 files

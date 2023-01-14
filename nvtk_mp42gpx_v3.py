@@ -16,6 +16,7 @@
 # -f    overwrite output file if exists
 # -d    deobfuscates coordinates, if the file only works with JMSPlayer use this flag
 # -m    multiple output files (default creates a single output file). Note: files will be named after originals.
+# -e    Exclude outliers. Removes impossible coordinates (too far from each other) due to errors in the GPS data.
 # 
 # 
 # New feauters:
@@ -27,6 +28,9 @@
 # By default, if "-b 180" used, frames will be distanced 2m back.
 # It is usefull at Mapillary app for separate two identical tracks (one from front and one from rear dashcam)
 # -c option will disable this behavior.
+# 
+# New option:  -u   Exclude duplicates. Merge duplicate (with same timestamp) track points into one, due to errors in the GPS data.
+# 
 # 
 # New fields at .gpx output file used in dashcam2josm_v3.py script:
 # frameTimePosition - Frame time in video file. If GPS data begins after video (after gps fix time) real frame position at video is saved here. (trkpt for frames without GPS data are not saved to .gpx file.)
@@ -108,7 +112,10 @@ def get_args():
                               'if the file only works with JMSPlayer use this flag.'))
     parser.add_argument('-e', action='store_true',
                         help=('exclude outliers. '
-                              'Removes impossible coordinates due to errors in the GPS data.'))
+                              'Removes impossible coordinates (too far from each other) due to errors in the GPS data.'))
+    parser.add_argument('-u', action='store_true',
+                        help=('Exclude duplicates. '
+                              'Merge duplicate track points (with same timestamp) into one, due to errors in the GPS data.'))
     parser.add_argument('-m', action='store_true',
                         help=('multiple output files (default creates a single output file). '
                               'Note: files will be named after originals.'))
@@ -152,6 +159,7 @@ def get_args():
         multiple = args.m
         deobfuscate = args.d
         del_outliers = args.e
+        del_duplicates = args.u
         in_file = check_in_file(args.i)
         bearingCorrection = args.b
         doNotBearingDistance = args.c
@@ -159,7 +167,7 @@ def get_args():
     except TypeError:
         parser.print_help()
         sys.exit(1)
-    return in_file, out_file, force, multiple, deobfuscate, sort_by, del_outliers, bearingCorrection, doNotBearingDistance
+    return in_file, out_file, force, multiple, deobfuscate, sort_by, del_outliers, del_duplicates, bearingCorrection, doNotBearingDistance
 
 
 def fix_coordinates(hemisphere, coordinate, deobfuscate=False):
@@ -450,7 +458,7 @@ def get_gps_data(data, deobfuscate, bearingCorrection, doNotBearingDistance):
         gps['FrameIsFarEnough'] = isFrameFarEnoughFromPrevious(gps['Loc']['Lat']['Float'], gps['Loc']['Lon']['Float'])
         
         if not doNotBearingDistance:
-            gps['Loc']['Lat']['Raw'], gps['Loc']['Lon']['Raw'] = distance_position_if_bearingCorrection(gps['Loc']['Lat']['Raw'], gps['Loc']['Lon']['Raw'], gps['Loc']['Bearing'], bearingCorrection)
+            gps['Loc']['Lat']['Float'], gps['Loc']['Lon']['Float'] = distance_position_if_bearingCorrection(gps['Loc']['Lat']['Float'], gps['Loc']['Lon']['Float'], gps['Loc']['Bearing'], bearingCorrection)
         gps['Loc']['Bearing'] = correct_bearing(gps['Loc']['Bearing'], bearingCorrection)
 
     else:
@@ -676,8 +684,85 @@ def remove_outliers(gps_data):
     return gps_data_filtered
 
 
+def GetCenterFromDegrees(latArr, lonArr):
+    """ Find center point. (https://stackoverflow.com/a/54549097) """
+    if (len(latArr) <= 0):
+        return false;
     
-def process_file(in_file, deobfuscate, del_outliers, bearingCorrection, doNotBearingDistance):
+    num_coords = len(latArr)
+    X = 0.0
+    Y = 0.0
+    Z = 0.0
+    
+    for i in range (len(latArr)):
+        lat = latArr[i] * math.pi / 180
+        lon = lonArr[i] * math.pi / 180
+        
+        a = math.cos(lat) * math.cos(lon)
+        b = math.cos(lat) * math.sin(lon)
+        c = math.sin(lat);
+        
+        X += a
+        Y += b
+        Z += c
+    
+    X /= num_coords
+    Y /= num_coords
+    Z /= num_coords
+    
+    lon = math.atan2(Y, X)
+    hyp = math.sqrt(X * X + Y * Y)
+    lat = math.atan2(Z, hyp)
+    
+    newX = (lat * 180 / math.pi)
+    newY = (lon * 180 / math.pi)
+    return newX, newY
+
+
+def merge_duplicates(gps_data):
+    """ merge duplicate points (with same timestamp) into one """
+    if not gps_data:
+        return gps_data
+    
+    gps_data_dict = {}
+    for data_point in gps_data:
+        if data_point['DT']['DT'] in gps_data_dict:
+            gps_data_dict[data_point['DT']['DT']].append(data_point)
+        else:
+            gps_data_dict[data_point['DT']['DT']] = [data_point]
+    
+    gps_data_filtered = []
+    for key, values in gps_data_dict.items():
+        if len(values) == 1:
+            gps_data_filtered.append(values[0])
+        else:
+            latArr = []
+            lonArr = []
+            speedArr = []
+            bearingArr = []
+            frameIsFarEnough = "N"
+            for value in values:
+                #print(key, " : ", value)
+                latArr.append(value['Loc']['Lat']['Float'])
+                lonArr.append(value['Loc']['Lon']['Float'])
+                speedArr.append(value['Loc']['Speed'])
+                bearingArr.append(value['Loc']['Bearing'])
+                if value['FrameIsFarEnough'] == "Y":
+                    frameIsFarEnough = "Y"
+            latCenter, lonCenter = GetCenterFromDegrees(latArr, lonArr)
+            center_data_point = values[0]
+            center_data_point['Loc']['Lat']['Float'] = latCenter
+            center_data_point['Loc']['Lon']['Float'] = lonCenter
+            center_data_point['Loc']['Speed'] = sum(speedArr) / float(len(speedArr))
+            center_data_point['Loc']['Bearing'] = sum(bearingArr) / float(len(bearingArr))
+            center_data_point['FrameIsFarEnough'] = frameIsFarEnough
+            gps_data_filtered.append(center_data_point)
+            print("Duplicate positions found and corrected. %x points with same timestamp %s merged to one point: lat=%f lon=%f" % (len(values), key, latCenter, lonCenter))
+    
+    return gps_data_filtered
+
+
+def process_file(in_file, deobfuscate, del_outliers, del_duplicates, bearingCorrection, doNotBearingDistance):
     """ process input file, looks for either MP4 or TS file signatures """
     print("Processing file '%s'..." % in_file)
     gps_data = []
@@ -693,6 +778,8 @@ def process_file(in_file, deobfuscate, del_outliers, bearingCorrection, doNotBea
     out = list(filter(None, gps_data))
     if del_outliers:
         out = remove_outliers(out)
+    if del_duplicates:
+        out = merge_duplicates(out)
     return out
 
 
@@ -724,7 +811,7 @@ def sort_gps_data_by_dt(gps_data):
 
 def main():
     """ main function """
-    in_files, out_file, force, multiple, deobfuscate, sort_by, del_outliers, bearingCorrection, doNotBearingDistance = get_args()
+    in_files, out_file, force, multiple, deobfuscate, sort_by, del_outliers, del_duplicates, bearingCorrection, doNotBearingDistance = get_args()
     gps_data = []
     success = False
     if sort_by == 'f':
@@ -735,12 +822,12 @@ def main():
             out_file = f_name + '.gpx'
             if not check_out_file(out_file, force):
                 continue
-            gps_data = process_file(in_file, deobfuscate, del_outliers, bearingCorrection, doNotBearingDistance)
+            gps_data = process_file(in_file, deobfuscate, del_outliers, del_duplicates, bearingCorrection, doNotBearingDistance)
             write_success = write_if_gps_data(gps_data, out_file)
             success = success or write_success
     else:
         for in_file in in_files:
-            gps_data += process_file(in_file, deobfuscate, del_outliers, bearingCorrection, doNotBearingDistance)
+            gps_data += process_file(in_file, deobfuscate, del_outliers, del_duplicates, bearingCorrection, doNotBearingDistance)
         if sort_by == 'd':
             gps_data = sort_gps_data_by_dt(gps_data)
         success = write_if_gps_data(gps_data, out_file)
