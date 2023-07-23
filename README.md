@@ -21,6 +21,7 @@ Options:
 -cf   Crop images generated from front video files. (For *F.MP4 files.) Format: width:height:x:y
 -cr   Crop images generated from rear video files. (For *R.MP4 files.) Format: width:height:x:y
       This options are useful if you don't want to share your sensitive data saved in the video by dashcam, or if your view is partially obscured.
+-a    Arrange output .jpg files from many input .mp4 files into one output folder per continuous camera sequence
 -f    Do not skip frames not far enaugh (5m) from previous saved
       By default this script skips images with are too close (less than 5 meters) from previous saved image. 
 -df   User provided directory with ffmpeg tool.

@@ -29,6 +29,8 @@
 # This options are useful if you don't want to share your sensitive data saved in the video by dashcam, or if your view is partially obscured.
 # Caution: width can not be a multiply of height. It causes bugs in Mapillary. See: https://forum.mapillary.com/t/bug-report-i-uploaded-this-normal-pic-but-it-is-showed-as-an-360/2948/7
 #
+# -a    Arrange output .jpg files from many input .mp4 files into one output folder per continuous camera sequence
+#
 # -f    Do not skip frames not far enaugh (5m) from previous saved
 # By default this script skips images with are too close (less than 5 meters) from previous saved image. 
 # This avoid generating many images from same position (in a traffic jam or at traffic lights)
@@ -91,22 +93,22 @@ bearingCorrectionForRearCam = '180'
 
 
 filesCount = 0;
-def check_in_file(in_file):
+def check_in_files(in_file):
     in_files = []
     for f in in_file:
         # glob needed if for some reason quoted glob is passed, or script is run on the most popular proprietary inferior OS
         for f1 in glob.glob(f):
-                if os.path.isdir(f1):
-                    print("Skipping subdirectory '%s'" % f1)
-                elif os.path.isfile(f1):
-                    if f1.upper().endswith(".MP4"):
-                        print("Queueing file '%s' for processing..." % f1)
-                        in_files.append(f1)
-                    else:
-                        print("File %s omitted. File name must end with .MP4" % f1)
+            if os.path.isdir(f1):
+                print("Skipping subdirectory '%s'" % f1)
+            elif os.path.isfile(f1):
+                if f1.upper().endswith(".MP4"):
+                    print("Queueing file '%s' for processing..." % f1)
+                    in_files.append(f1)
                 else:
-                    # Catch all for typos...
-                    print("Skipping invalid input '%s'..." % f1)
+                    print("File %s omitted. File name must end with .MP4" % f1)
+            else:
+                # Catch all for typos...
+                print("Skipping invalid input '%s'..." % f1)
     global filesCount
     filesCount = len(in_files)
     print("Queueing total: '%s' files" % filesCount)
@@ -119,6 +121,7 @@ def get_args():
     parser.add_argument('-c', metavar='crop', help='Crop images generated from video files. Format: width:height:x:y')
     parser.add_argument('-cf', metavar='cropFront', help='Crop images generated from front video file. Format: width:height:x:y')
     parser.add_argument('-cr', metavar='cropRear', help='Crop images generated from rear video file. Format: width:height:x:y')
+    parser.add_argument('-a', action='store_true', help=' Arrange output .jpg files from many input .mp4 files into one output folder per continuous camera sequence')
     parser.add_argument('-f', action='store_true', help='Do not skip frames not far enaugh (5m) from previous saved')
     parser.add_argument('-df', metavar='ffmpegUserDir', help='User provided directory with ffmpeg tool. https://ffmpeg.org')
     parser.add_argument('-de', metavar='exiftoolUserDir', help='User provided directory with exiftool tool. https://exiftool.org')
@@ -149,15 +152,16 @@ def get_args():
         sys.exit(1)
     not_del_outliers = args.ne
     not_del_duplicates = args.nd
+    arrange = args.a
     
     try:
         doNotSkip = args.f
-        in_file = check_in_file(args.i)
+        in_files = check_in_files(args.i)
     except:
         print("Unexpected error:", sys.exc_info()[0])
         parser.print_help()
         sys.exit(1)
-    return (in_file, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates)
+    return (in_files, crop, cropFront, cropRear, arrange, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates)
 
 
 def check_crop(cropParam, cropStr):
@@ -259,7 +263,7 @@ def create_jpgs(subDirPath, subDirGpx, name, subDirMp4, fileNum, crop, cropFront
     n = 0
     timestampPattern = '%Y-%m-%dT%H:%M:%SZ'
     gpxTrkptElemList = gpxXmlRoot.findall('.//{http://www.topografix.com/GPX/1/0}trkpt')
-    s=len(gpxTrkptElemList)
+    s = len(gpxTrkptElemList)
     for gpxTrkptElem in gpxTrkptElemList:
         n = n + 1
         paddedNumber = '{0:04d}'.format(n)
@@ -312,7 +316,7 @@ def clean_subDirMp4(subDirMp4):
     return
 
 def clean_subDirOrginal(subDirPath):
-    subDirExiftoolTmps = glob.glob(subDirPath+'/*original')
+    subDirExiftoolTmps = glob.glob(subDirPath + '/*original')
     for subDirExiftoolTmp in subDirExiftoolTmps:
         os.remove(subDirExiftoolTmp)
     return
@@ -328,9 +332,53 @@ def findToolDir(userDir, toolName, currentScriptDir):
     #print("return currentScriptDir with hope that tool is on the system path")
     return currentScriptDir
 
+
+def arrangeOutputFiles(outputDir, gpxDirName, names, camName):
+    timestampPattern = '%Y-%m-%dT%H:%M:%SZ'
+    outputName = os.path.basename(outputDir)
+    sequenceNum = 0
+    currentSequenceLastTs = None
+    currentSequenceJpgDirName = None
+    print("arrangeOutputFiles. camName: %s" % (camName))
+    for name in names:
+        subDirPath = os.path.join(outputDir, name)
+        gpxFileName = name + '.gpx'
+        subDirGpx = os.path.join(subDirPath, gpxFileName)
+        if os.path.isfile(subDirGpx):
+            gpxXmlTree = ET.parse(subDirGpx)
+            gpxXmlRoot = gpxXmlTree.getroot()
+            gpxFirstTrkptElemList = gpxXmlRoot.findall('.//{http://www.topografix.com/GPX/1/0}trkpt[1]')
+            gpxLastTrkptElemList = gpxXmlRoot.findall('.//{http://www.topografix.com/GPX/1/0}trkpt[last()]')
+            if len(gpxFirstTrkptElemList) == 1 and len(gpxLastTrkptElemList) == 1:
+                gpxFirstUtcTimeString = gpxFirstTrkptElemList[0].find('{http://www.topografix.com/GPX/1/0}time').text
+                gpxLastUtcTimeString = gpxLastTrkptElemList[0].find('{http://www.topografix.com/GPX/1/0}time').text
+                gpxFirstUtcTimeTs = datetime.datetime.strptime(gpxFirstUtcTimeString, timestampPattern)
+                gpxLastUtcTimeTs = datetime.datetime.strptime(gpxLastUtcTimeString, timestampPattern)
+                if currentSequenceLastTs is None or (gpxFirstUtcTimeTs - currentSequenceLastTs).total_seconds() > 10:
+                    sequenceNum = sequenceNum + 1
+                    print("arrangeOutputFiles. Found new sequence %s starting from name: %s (new start timestamp %s, old end timestamp %s" % (sequenceNum, name, gpxFirstUtcTimeString, currentSequenceLastTs))
+                    currentSequenceLastTs = gpxLastUtcTimeTs
+                    currentSequenceJpgDirName = os.path.join(outputDir, outputName + '_' + camName + '_' + str(sequenceNum))
+                    if not os.path.isdir(currentSequenceJpgDirName):
+                        os.mkdir(currentSequenceJpgDirName)
+                else:
+                    currentSequenceLastTs = gpxLastUtcTimeTs
+                # copy gpx file from current subDir to gpx dir
+                shutil.move(subDirGpx, os.path.join(gpxDirName, gpxFileName))
+                # copy all jpg files from current subDir to sequence dir
+                allJpgFiles = glob.glob(os.path.join(subDirPath, '*.jpg'), recursive=True)
+                for jpgFilePath in allJpgFiles:
+                    dstJpgFilePath = os.path.join(currentSequenceJpgDirName, os.path.basename(jpgFilePath))
+                    shutil.move(jpgFilePath, dstJpgFilePath)
+                # delete old output subDir
+                os.rmdir(subDirPath)
+            else:
+                print("arrangeOutputFiles. WARNING. Wrong subDirGpx file: %s" % (subDirGpx))
+
+
 def main():
     startTs = datetime.datetime.now()
-    in_files, crop, cropFront, cropRear, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates = get_args()
+    in_files, crop, cropFront, cropRear, arrange, doNotSkip, ffmpegUserDir, exiftoolUserDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates = get_args()
     orginalDir = os.getcwd()
     currentScriptDir = os.path.dirname(os.path.realpath(__file__))
     ffmpegDir = findToolDir(ffmpegUserDir, 'ffmpeg', currentScriptDir)
@@ -338,15 +386,22 @@ def main():
     print("currentScript = %s   currentScriptDir = %s   currentDirectory = %s   ffmpegDir = %s   exiftoolDir = %s   systemencoding = %s" % (os.path.realpath(__file__), currentScriptDir, os.getcwd(), ffmpegDir, exiftoolDir, locale.getpreferredencoding()))
     print('current video file/total video files:current frame/total video frames:')
     fileNum = 0
-    for f in in_files:
+    outputDir = os.getcwd()
+    namesFront = []
+    namesRear = []
+    for in_file in in_files:
         fileNum = fileNum + 1
-        name = f[0:len(f)-4]
-        sourceMp4 = os.path.join(os.getcwd(),f)
+        name = in_file[0:len(in_file)-4]
+        if name.upper().endswith("R"):
+            namesRear.append(name)
+        else:
+            namesFront.append(name)
+        sourceMp4 = os.path.join(os.getcwd(), in_file)
         # make subdir for each .MP4 file
-        subDirPath = os.path.join(os.getcwd(), name)
-        subDirGpx = os.path.join(subDirPath, name+'.gpx')
-        subDirMp4 = os.path.join(subDirPath, name+'.MP4')
-        print("f=%s name=%s subDirPath=%s" % (f, name, subDirPath))
+        subDirPath = os.path.join(outputDir, name)
+        subDirGpx = os.path.join(subDirPath, name + '.gpx')
+        subDirMp4 = os.path.join(subDirPath, name + '.MP4')
+        print("in_file=%s name=%s subDirPath=%s" % (in_file, name, subDirPath))
         # prepare subfolder for source MP4 file
         create_subDir(subDirPath, subDirGpx, subDirMp4, sourceMp4)
         # create .gpx file from source MP4 via nvtk_mp42gpx.py script
@@ -360,6 +415,13 @@ def main():
         # remove tmp *.original files
         clean_subDirOrginal(subDirPath)
         os.chdir(orginalDir)
+    if arrange:
+        outputName = os.path.basename(outputDir)
+        gpxDirName = os.path.join(outputDir, outputName + '_gpx')
+        if not os.path.isdir(gpxDirName):
+            os.mkdir(gpxDirName)
+        arrangeOutputFiles(outputDir, gpxDirName, namesFront, 'F')
+        arrangeOutputFiles(outputDir, gpxDirName, namesRear, 'R')
     endTs = datetime.datetime.now()
     print("")
     print("Script completed. Time=%s" % (endTs-startTs))
