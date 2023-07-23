@@ -244,7 +244,10 @@ def create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_
     process.wait()
     exitCode = process.returncode
     print("END run script. out = %s" % exitCode)
-    return
+    if exitCode == 0:
+        return True
+    else:
+        return False
 
 
 def utc_to_local(utc_dt):
@@ -320,6 +323,9 @@ def clean_subDirOrginal(subDirPath):
     for subDirExiftoolTmp in subDirExiftoolTmps:
         os.remove(subDirExiftoolTmp)
     return
+
+def remove_subDir(subDirPath):
+    os.rmdir(subDirPath)
 
 def findToolDir(userDir, toolName, currentScriptDir):
     print("findToolDir: toolName = %s  userDir = %s  currentScriptDir = %s" % (toolName, userDir, currentScriptDir))
@@ -405,15 +411,19 @@ def main():
         # prepare subfolder for source MP4 file
         create_subDir(subDirPath, subDirGpx, subDirMp4, sourceMp4)
         # create .gpx file from source MP4 via nvtk_mp42gpx.py script
-        create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates)
+        gpx_created = create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates)
         # create .jpg files from source MP4 via ffmpeg and exiftool
-        create_jpgs(subDirPath, subDirGpx, name, subDirMp4, fileNum, crop, cropFront, cropRear, doNotSkip, ffmpegDir, exiftoolDir)
+        if gpx_created:
+            create_jpgs(subDirPath, subDirGpx, name, subDirMp4, fileNum, crop, cropFront, cropRear, doNotSkip, ffmpegDir, exiftoolDir)
         # remove tmp *.MP4 files
         clean_subDirMp4(subDirMp4)
-        # geotag .jpg files from .gpx file via exiftool
-        geotag_jpgs(subDirPath, subDirGpx, name, exiftoolDir)
-        # remove tmp *.original files
-        clean_subDirOrginal(subDirPath)
+        if gpx_created:
+            # geotag .jpg files from .gpx file via exiftool
+            geotag_jpgs(subDirPath, subDirGpx, name, exiftoolDir)
+            # remove tmp *.original files
+            clean_subDirOrginal(subDirPath)
+        else:
+            remove_subDir(subDirPath)
         os.chdir(orginalDir)
     if arrange:
         outputName = os.path.basename(outputDir)

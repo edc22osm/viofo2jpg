@@ -1,6 +1,6 @@
 # 
 # nvtk_mp42gpx_v3.py
-# Version: 2023-01-05
+# Version: 2023-07-24
 # License: GPL3
 #
 #
@@ -476,7 +476,7 @@ def get_gps_atom(gps_atom_info, in_fh, deobfuscate, bearingCorrection, doNotBear
     atom_pos, atom_size = gps_atom_info
     #print("get_gps_atom:  atom_pos=%d atom_size=%d" % (atom_pos, atom_size))
     if atom_size == 0 or atom_pos == 0:
-        print("Error! skipping atom at %x atom size:%d!" % (int(atom_pos), atom_size))
+        print("Error! skipping atom at %x atom size:%d" % (int(atom_pos), atom_size))
         return None
     in_fh.seek(atom_pos)
     data = in_fh.read(atom_size)
@@ -605,7 +605,7 @@ def parse_moov(in_fh, deobfuscate, bearingCorrection, doNotBearingDistance):
             sub_offset = offset + 8
             while sub_offset < (offset + atom_size):
                 sub_atom_size, sub_atom_type = get_atom_info(in_fh.read(8))
-
+                
                 if str(sub_atom_type) == 'gps ':
                     print("Found the gps chunk descriptor atom.")
                     print("Parsing atoms: '.'- with gps data, 'x'-without gps data")
@@ -798,7 +798,7 @@ def write_if_gps_data(gps_data, out_file):
         print("Found %d GPS data points. Writing to the output file: %s" % (len(gps_data), out_file))
         write_file(gpx, out_file)
     else:
-        print("GPS data not found in the '%s'!" % out_file)
+        print("GPS data not found. Can not create file %s" % out_file)
         return False
     return True
 
