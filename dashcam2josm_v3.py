@@ -1,6 +1,6 @@
 # 
 # dashcam2josm_v3.py
-# Version: 2023-01-05
+# Version: 2023-07-24
 # License: GPL3 
 #
 #
