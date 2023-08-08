@@ -364,7 +364,7 @@ def arrangeOutputFiles(outputDir, gpxDirName, names, camName):
                     sequenceNum = sequenceNum + 1
                     print("arrangeOutputFiles. Found new sequence %s starting from name: %s (new start timestamp %s, old end timestamp %s" % (sequenceNum, name, gpxFirstUtcTimeString, currentSequenceLastTs))
                     currentSequenceLastTs = gpxLastUtcTimeTs
-                    currentSequenceJpgDirName = os.path.join(outputDir, outputName + '_' + camName + '_' + str(sequenceNum))
+                    currentSequenceJpgDirName = os.path.join(outputDir, outputName + '_' + str(sequenceNum) + '_' + camName)
                     if not os.path.isdir(currentSequenceJpgDirName):
                         os.mkdir(currentSequenceJpgDirName)
                 else:
