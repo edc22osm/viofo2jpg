@@ -397,7 +397,7 @@ def main():
     namesRear = []
     for in_file in in_files:
         fileNum = fileNum + 1
-        name = in_file[0:len(in_file)-4]
+        name = os.path.splitext(os.path.basename(in_file))[0]
         if name.upper().endswith("R"):
             namesRear.append(name)
         else:
