@@ -818,7 +818,7 @@ def main():
         in_files.sort()
     if multiple:
         for in_file in in_files:
-            f_name, _ = os.path.splitext(in_file)
+            f_name, _ = os.path.splitext(os.path.join(os.path.dirname(in_file), os.path.basename(in_file)))
             out_file = f_name + '.gpx'
             if not check_out_file(out_file, force):
                 continue
