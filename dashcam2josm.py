@@ -1,10 +1,10 @@
 # 
-# dashcam2josm_v3.py
-# Version: 2023-07-24
+# dashcam2josm.py
+# Version: 2023-09-16
 # License: GPL3 
 #
 #
-# dashcam2josm_v3.py is based on dashcam2josm.sh script from https://retiredtechie.fitchfamily.org/2018/05/13/dashcam-openstreetmap-mapping/
+# This dashcam2josm.py script is based on dashcam2josm.sh script from https://retiredtechie.fitchfamily.org/2018/05/13/dashcam-openstreetmap-mapping/
 #
 # 
 # This script generates geotaged jpg images from .MP4 video file recorded by Viofo dashcam
@@ -12,7 +12,7 @@
 # Tested on files from  Viofo A129 DUO dashcam (Novatek NTK96663 chip) (front and rear cams) and Mapillary script uploader.
 #
 # This script requires: 
-#    - nvtk_mp42gpx_v3.py script
+#    - nvtk_mp42gpx.py script
 #    - ffmpeg tool (tested on version git-2020-07-13-7772666 from https://ffmpeg.org)
 #    - exiftool tool (tested on version 12.01 from https://exiftool.org)
 # 
@@ -39,12 +39,12 @@
 # -de   User provided directory with exiftool tool.
 #
 # -d    Deobfuscates coordinates. If the file only works with JMSPlayer use this flag. 
-#       (param directly pass to nvtk_mp42gpx_v3.py script)
+#       (param directly pass to nvtk_mp42gpx.py script)
 # -c    Specify on what to sort by. 
 #           The -s f will sort the output by the file name. 
 #           The -s d will sort the output by the GPS date (default).
 #           The -s n will not sort the output.
-#       (param directly pass to nvtk_mp42gpx_v3.py script)
+#       (param directly pass to nvtk_mp42gpx.py script)
 #
 # -ne   Do not exclude outliers. By default script removes impossible coordinates (too far from each other) due to errors in the GPS data.
 # -nd   Do not exclude duplicates. By default script merges duplicate track points (with same timestamp) into one, due to errors in the GPS data.
@@ -219,9 +219,9 @@ def create_subDir(subDirPath, subDirGpx, subDirMp4, sourceMp4):
 
 
 def create_gpx(name, subDirMp4, currentScriptDir, deobfuscate, sort_by, not_del_outliers, not_del_duplicates):
-    # run nvtk_mp42gpx_v3.py script
-    print("START run script. %s " % os.path.join(currentScriptDir, 'nvtk_mp42gpx_v3.py'))
-    command = ['python', os.path.join(currentScriptDir, 'nvtk_mp42gpx_v3.py')]
+    # run nvtk_mp42gpx.py script
+    print("START run script. %s " % os.path.join(currentScriptDir, 'nvtk_mp42gpx.py'))
+    command = ['python', os.path.join(currentScriptDir, 'nvtk_mp42gpx.py')]
     command.append('-i')
     command.append(subDirMp4)
     command.append('-f')

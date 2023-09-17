@@ -1,10 +1,10 @@
 # 
-# nvtk_mp42gpx_v3.py
-# Version: 2023-07-24
+# nvtk_mp42gpx.py
+# Version: 2023-09-16
 # License: GPL3
 #
 #
-# nvtk_mp42gpx_v3.py is based on nvtk_mp42gpx.py script from https://sergei.nz/nvtk_mp42gpx-py-revisited-now-with-ts-support/
+# This nvtk_mp42gpx.py is based on nvtk_mp42gpx.py script from https://sergei.nz/nvtk_mp42gpx-py-revisited-now-with-ts-support/
 #
 #
 # Script extracts GPS data from Novatek generated MP4 files.
@@ -32,7 +32,7 @@
 # New option:  -u   Exclude duplicates. Merge duplicate (with same timestamp) track points into one, due to errors in the GPS data.
 # 
 # 
-# New fields at .gpx output file used in dashcam2josm_v3.py script:
+# New fields at .gpx output file used in dashcam2josm.py script:
 # frameTimePosition - Frame time in video file. If GPS data begins after video (after gps fix time) real frame position at video is saved here. (trkpt for frames without GPS data are not saved to .gpx file.)
 # frameIsFarEnough - "Y" if the distance from the previous frame (trkpt) is more than 5 meters, "N" otherwise 
 # 

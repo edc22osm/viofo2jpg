@@ -4,14 +4,14 @@ Python scripts to generate geotaged images from Viofo A129 DUO (and simillar) da
 
 
 ## Files
-dashcam2josm_v3.py - Script generates geotaged jpg images from .MP4 video file recorded by Viofo dashcam
-nvtk_mp42gpx_v3.py - Script extracts GPS data from Novatek generated MP4 files.
+dashcam2josm.py - Script generates geotaged jpg images from .MP4 video file recorded by Viofo dashcam
+nvtk_mp42gpx.py - Script extracts GPS data from Novatek generated MP4 files.
 
 
 ## Use
 ```
 cd <path_to_your_Viofo_dashcam_MP4_videos>
-python <path_to_script>\dashcam2josm_v3.py -i *.MP4
+python <path_to_script>\dashcam2josm.py -i *.MP4
 ```
 
 Options:
